@@ -1,0 +1,168 @@
+<script setup>
+import { onMounted, ref } from "vue"
+import axios from "axios";
+import ExamsHeader from '@/components/ExamsHeader.vue';
+import Question from "../components/Question.vue";
+
+
+const questions = ref([])
+const student = ref({})
+const test = ref({})
+const time = ref(0)
+const show = ref(false)
+const alert = ref(false)
+
+
+const studentCode = ref("")
+const testID = ref("661e8ba27d25c7947c38bfb7")
+
+const wait = ref(false)
+const status_text = ref("Đang xử lý...")
+const messageAlert = ref("")
+
+
+const handleClick = async () =>
+{
+    try
+    {
+        wait.value = true;
+        // axios.defaults.httpsAgent = new https.Agent({
+        //     rejectUnauthorized: false
+        // })
+        studentCode.value = studentCode.value.toUpperCase()
+        const socket = new WebSocket(`ws://squid-app-3or8j.ondigitalocean.app/task_service/ws/status/${studentCode.value}`);
+
+        socket.onmessage = (event) =>
+        {
+            console.log('Dữ liệu nhận được:', event.data);
+            status_text.value = event.data;
+        }
+
+        const response = await axios.post('https://squid-app-3or8j.ondigitalocean.app/task_service/start_test', { "test_id": testID.value, "student_code": studentCode.value });
+
+        console.log('Trả về:', response.data);
+
+        if (response.status === 200)
+        {
+
+            if (response.data.status == 'failed')
+            {
+                wait.value = false;
+                alert.value = true;
+                const resMessage = response.data.message;
+                if (resMessage == "Student code is invalid!")
+                    messageAlert.value = "Mã sinh viên không hợp lệ hoặc không tồn tại!";
+                else if (resMessage == "Student do not have access to this test!")
+                    messageAlert.value = "Sinh viên không có quyền truy cập bài thi này!";
+                else if (resMessage == "Test not found!")
+                    messageAlert.value = "Bài test không tồn tại, vui lòng kiểm tra lại!";
+                else
+                    messageAlert.value = "Có lỗi xảy ra khi gửi dữ liệu!";
+                return;
+            }
+            show.value = true
+            console.log('Dữ liệu:', response.data);
+            questions.value = response.data.data.questions ;
+            student.value = response.data.data.student;
+            test.value = response.data.data.test;
+            time.value = test.value.time;
+            alert.value = false;
+        }
+        else
+        {
+            console.error('Có lỗi xảy ra khi gửi dữ liệu');
+            wait.value = false;
+            status_text.value = "";
+        }
+    }
+    catch (error)
+    {
+        console.error('Lỗi:', error);
+    }
+}
+
+</script>
+
+<template>
+    <n-space vertical :size="12">
+        <n-alert title="Error Text" type="error" v-if="alert">
+            {{ messageAlert }}
+        </n-alert>
+    </n-space>
+
+    <div v-if="questions.length > 0">
+        <div class="sticky-header">
+            <ExamsHeader :student="student" :time="time" :name="test.name" />
+        </div>
+
+        <div class="question-container">
+            <Question :questions="questions" />
+        </div>
+    </div>
+
+    <div class="container-main" v-else>
+        <div v-if="wait" class="card-spinner">
+            <NSpin size="large" />
+            <p style="color: black; margin-top: 30%; font-size: 150%;">{{ status_text }}</p>
+        </div>
+        <div class="btn" v-else>
+            <n-input v-model:value="testID" style="margin-bottom: 10%;" type="text" placeholder="Test ID" />
+            <n-input v-model:value="studentCode" style="margin-bottom: 10%;" type="text" placeholder="Student Code" />
+
+            <n-button @click="handleClick" strong secondary type="primary" size="large">
+                Bắt đầu làm bài
+            </n-button>
+        </div>
+    </div>
+</template>
+
+<style scope>
+.sticky-header
+{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    /* Đảm bảo header hiển thị trên cùng */
+    background-color: #fff;
+}
+
+.question-container
+{
+    margin-top: 3%;
+    /* Điều chỉnh giá trị này sao cho phù hợp với chiều cao của header */
+}
+
+.container-main
+{
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #ffffff;
+}
+
+.card-spinner
+{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.btn
+{
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    border: 1px solid #c4c4c4;
+    padding: 5%;
+    border-radius: 5%;
+    background-color: #f8ffd1;
+    box-shadow: 2px 2px 2px #fff;
+}
+</style>
